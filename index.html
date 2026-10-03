@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Deep Learning Racer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #000;
+            color: #fff;
+            overflow: hidden;
+            touch-action: none; /* Prevent scrolling on mobile */
+        }
+        canvas {
+            display: block;
+        }
+        /* Custom retro font for that minimalist data vibe */
+        @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap');
+        .font-tech {
+            font-family: 'Share Tech Mono', monospace;
+        }
+        
+        .btn-glow:active {
+            box-shadow: 0 0 15px 2px rgba(255, 255, 255, 0.8);
+            transform: scale(0.98);
+        }
+    </style>
+</head>
+<body class="font-tech flex flex-col h-screen w-screen selection:bg-white selection:text-black">
+
+    <!-- Top UI: Upgrade Bar -->
+    <div class="absolute top-0 left-0 w-full p-4 z-10 flex flex-col items-center">
+        <div class="w-full max-w-2xl flex justify-between items-end mb-2">
+            <span class="text-xs tracking-widest uppercase">Engine State</span>
+            <span id="upgrade-text" class="text-sm font-bold">0%</span>
+        </div>
+        <div class="w-full max-w-2xl h-3 border border-white p-[1px] relative">
+            <div id="upgrade-bar" class="h-full bg-white transition-all duration-75" style="width: 0%;"></div>
+            <!-- Marker to show when upgrade hits -->
+            <div class="absolute top-0 right-0 h-full w-[2px] bg-red-500 hidden" id="max-marker"></div>
+        </div>
+        <div id="status-message" class="mt-4 text-center tracking-widest text-sm text-gray-400 h-6">
+            START IN THE PACK — DEEP FOCUS MAKES YOU FALL BACK; HUSTLE CAN OVERTAKE.
+        </div>
+    </div>
+
+    <!-- Win Overlay -->
+    <div id="win-overlay" class="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black/80 opacity-0 pointer-events-none transition-opacity duration-1000">
+        <h1 class="text-4xl md:text-6xl font-bold tracking-widest text-white mb-4 shadow-white drop-shadow-[0_0_10px_rgba(255,255,255,0.8)]">#1 PLACE</h1>
+        <p class="text-xl md:text-2xl text-gray-300 tracking-wide">Deep Learning Wins — after the hustle gets you into the race.</p>
+        <button onclick="location.reload()" class="mt-8 px-6 py-2 border border-white hover:bg-white hover:text-black transition-colors">Restart Simulation</button>
+    </div>
+
+    <!-- Game Canvas -->
+    <canvas id="game-canvas" class="flex-grow z-0"></canvas>
+
+    <!-- Bottom UI: Controls and Heartbeat -->
+    <div class="absolute bottom-0 left-0 w-full p-4 pb-8 z-10 flex flex-col md:flex-row items-center justify-center gap-4 md:gap-8 bg-gradient-to-t from-black via-black/80 to-transparent">
+        
+        <!-- Hustle Button -->
+        <button id="btn-hustle" class="btn-glow flex-1 md:flex-none border-2 border-white px-4 md:px-8 py-5 min-h-[76px] touch-manipulation flex flex-col items-center justify-center transition-colors hover:bg-white/10 active:bg-white active:text-black w-full md:w-48">
+            <span class="text-lg font-bold tracking-wider">HUSTLE</span>
+            <span class="text-xs opacity-70 mt-1">[SPACEBAR]</span>
+        </button>
+
+        <!-- Heartbeat Monitor -->
+        <div class="flex-1 w-full max-w-md h-20 border border-white/30 bg-black/50 relative overflow-hidden flex flex-col">
+            <span class="absolute top-1 left-2 text-[10px] text-white/50 tracking-wider z-10">MENTAL STATE</span>
+            <canvas id="heartbeat-canvas" class="w-full h-full"></canvas>
+        </div>
+
+        <!-- Focus Button -->
+        <button id="btn-focus" class="btn-glow flex-1 md:flex-none border-2 border-white px-4 md:px-8 py-5 min-h-[76px] touch-manipulation flex flex-col items-center justify-center transition-colors hover:bg-white/10 active:bg-white active:text-black w-full md:w-48">
+            <span class="text-lg font-bold tracking-wider">DEEP FOCUS</span>
+            <span class="text-xs opacity-70 mt-1">[HOLD 'F']</span>
+        </button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('game-canvas');
+        const ctx = canvas.getContext('2d');
+        const heartCanvas = document.getElementById('heartbeat-canvas');
+        const heartCtx = heartCanvas.getContext('2d');
+        
+        // UI Elements
+        const upgradeBar = document.getElementById('upgrade-bar');
+        const upgradeText = document.getElementById('upgrade-text');
+        const statusMessage = document.getElementById('status-message');
+        const winOverlay = document.getElementById('win-overlay');
+        const btnHustle = document.getElementById('btn-hustle');
+        const btnFocus = document.getElementById('btn-focus');
+
+        // Sizing
+        let width, height;
+        function resize() {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas.width = width;
+            canvas.height = height;
+            
+            // Heartbeat canvas internal res
+            const heartRect = heartCanvas.parentElement.getBoundingClientRect();
+            heartCanvas.width = heartRect.width;
+            heartCanvas.height = heartRect.height;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        // State
+        const state = {
+            hustle: false,
+            focus: false,
+            progress: 0,
+            upgraded: false,
+            won: false,
+            hustleTime: 0,
+            focusTime: 0,
+            recoveryTime: 0,
+            focusLeadLimit: 900,
+            focusBoostPulse: 0,
+            placeOnePulse: 0,
+            playerWasFirst: false,
+            showFirstPlace: false
+        };
+
+        // Input Handlers
+        const handleHustleStart = (e) => {
+            if(e) e.preventDefault();
+            state.hustle = true;
+            state.hustleTime = 0;
+            state.recoveryTime = 0;
+        };
+        const handleHustleEnd = (e) => {
+            if(e) e.preventDefault();
+            state.hustle = false;
+            state.recoveryTime = 45; // short acceleration after releasing
+        };
+        const handleFocusStart = (e) => {
+            if(e) e.preventDefault();
+            state.focus = true;
+            state.focusTime = 0;
+            state.recoveryTime = 0;
+        };
+        const handleFocusEnd = (e) => {
+            if(e) e.preventDefault();
+            state.focus = false;
+            state.recoveryTime = 70; // faster recovery after studying
+        };
+
+        // Mobile + desktop controls.
+        // Pointer Events cover touch, pen and mouse with one implementation.
+        const bindPressAndHold = (button, start, end) => {
+            button.addEventListener('pointerdown', (e) => {
+                e.preventDefault();
+                button.setPointerCapture?.(e.pointerId);
+                start(e);
+            });
+
+            button.addEventListener('pointerup', (e) => {
+                e.preventDefault();
+                end(e);
+            });
+
+            button.addEventListener('pointercancel', end);
+            button.addEventListener('pointerleave', (e) => {
+                if (e.buttons === 0) end(e);
+            });
+        };
+
+        bindPressAndHold(btnHustle, handleHustleStart, handleHustleEnd);
+        bindPressAndHold(btnFocus, handleFocusStart, handleFocusEnd);
+
+        // Prevent long-press browser menus/selection while holding a game button.
+        [btnHustle, btnFocus].forEach(button => {
+            button.addEventListener('contextmenu', e => e.preventDefault());
+        });
+
+        // Keyboard
+        window.addEventListener('keydown', (e) => {
+            if (e.code === 'Space' && !e.repeat) state.hustle = true;
+            if (e.code === 'KeyF' && !e.repeat) state.focus = true;
+        });
+        window.addEventListener('keyup', (e) => {
+            if (e.code === 'Space') {
+                state.hustle = false;
+                state.recoveryTime = 45;
+            }
+            if (e.code === 'KeyF') {
+                state.focus = false;
+                state.recoveryTime = 70;
+            }
+        });
+
+        class Car {
+            constructor(x, y, isPlayer = false) {
+                this.x = x;
+                this.y = y;
+                this.isPlayer = isPlayer;
+                this.width = 60;
+                this.height = 20;
+                this.speed = isPlayer ? 3 : 5.5; // Base speeds (Competitors move faster natively)
+                this.trail = [];
+                this.hustleCooldown = 0;
+            }
+
+            draw(cameraX) {
+                const drawX = this.x - cameraX;
+                
+                // Don't draw if far off screen
+                if (drawX < -200 || drawX > width + 200) return;
+
+                let shakeX = 0;
+                let shakeY = 0;
+
+                // Player specific drawing logic (Shake and trails)
+                if (this.isPlayer) {
+                    if (state.hustle && !state.upgraded) {
+                        shakeX = (Math.random() - 0.5) * 6;
+                        shakeY = (Math.random() - 0.5) * 4;
+                    }
+
+                    // Draw trail if upgraded
+                    if (state.upgraded) {
+                        this.trail.push({x: drawX, y: this.y + this.height/2});
+                        if (this.trail.length > 20) this.trail.shift();
+                        
+                        ctx.beginPath();
+                        ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+                        ctx.lineWidth = 4;
+                        for (let i = 0; i < this.trail.length; i++) {
+                            const p = this.trail[i];
+                            if (i === 0) ctx.moveTo(p.x, p.y);
+                            else ctx.lineTo(p.x, p.y);
+                        }
+                        ctx.stroke();
+                        
+                        // Engine glow
+                        ctx.shadowBlur = 20;
+                        ctx.shadowColor = "white";
+                    } else {
+                        ctx.shadowBlur = 0;
+                        this.trail = [];
+                    }
+                }
+
+                // Draw Car Body — minimalist black/white chassis with one subtle player accent
+                ctx.beginPath();
+                ctx.strokeStyle = this.isPlayer ? '#D6D6D6' : 'white';
+                ctx.lineWidth = this.isPlayer ? 2.5 : 2;
+                
+                const cx = drawX + shakeX;
+                const cy = this.y + shakeY;
+
+                // Aerodynamic shape
+                ctx.moveTo(cx, cy + this.height); // Bottom left
+                ctx.lineTo(cx, cy + this.height * 0.4); // Back up
+                ctx.lineTo(cx + this.width * 0.2, cy); // Roof start
+                ctx.lineTo(cx + this.width * 0.7, cy); // Roof end
+                ctx.lineTo(cx + this.width, cy + this.height * 0.5); // Nose
+                ctx.lineTo(cx + this.width, cy + this.height); // Bottom right
+                ctx.closePath();
+                ctx.stroke();
+
+                // Simple player accent: restrained gray/silver stripe
+                if (this.isPlayer) {
+                    ctx.beginPath();
+                    ctx.strokeStyle = '#9A9A9A';
+                    ctx.lineWidth = 2;
+                    ctx.moveTo(cx + this.width * 0.28, cy + 2);
+                    ctx.lineTo(cx + this.width * 0.72, cy + 2);
+                    ctx.stroke();
+                }
+
+                // Deep Focus NITRO — clearly visible behind the player's
+                // tail. Drawn BEFORE the wheels/body details so it reads as
+                // exhaust coming directly out of the rear of the car.
+                if (this.isPlayer && state.focus) {
+                    const p = state.focusBoostPulse;
+                    const flicker = 0.92 + Math.sin(p * 2.0) * 0.08;
+                    const tailX = cx - this.width * 0.34;
+                    const plumeLength = this.width * (0.85 + 0.18 * Math.sin(p));
+
+                    ctx.save();
+                    ctx.globalAlpha = flicker;
+
+                    // Bright outer nitro flame.
+                    ctx.beginPath();
+                    ctx.moveTo(tailX, cy - 8);
+                    ctx.lineTo(tailX - plumeLength, cy);
+                    ctx.lineTo(tailX, cy + 8);
+                    ctx.closePath();
+                    ctx.fillStyle = '#FFFFFF';
+                    ctx.fill();
+
+                    // Darker inner flame keeps the shape visible against the
+                    // white road/background while remaining monochrome.
+                    ctx.globalAlpha = 0.9;
+                    ctx.beginPath();
+                    ctx.moveTo(tailX, cy - 4);
+                    ctx.lineTo(tailX - plumeLength * 0.72, cy);
+                    ctx.lineTo(tailX, cy + 4);
+                    ctx.closePath();
+                    ctx.fillStyle = '#777777';
+                    ctx.fill();
+
+                    // Strong exhaust streak extending from the tail.
+                    ctx.globalAlpha = 1;
+                    ctx.strokeStyle = '#FFFFFF';
+                    ctx.lineWidth = 3;
+                    ctx.beginPath();
+                    ctx.moveTo(tailX, cy);
+                    ctx.lineTo(tailX - plumeLength * 1.05, cy);
+                    ctx.stroke();
+
+                    ctx.restore();
+                }
+
+                // Wheels
+                ctx.beginPath();
+                ctx.arc(cx + 15, cy + this.height, 6, 0, Math.PI * 2);
+                ctx.arc(cx + this.width - 15, cy + this.height, 6, 0, Math.PI * 2);
+                ctx.stroke();
+                
+                ctx.shadowBlur = 0; // Reset shadow
+            }
+        }
+
+        // Initialize Entities
+        // Player starts inside the pack, not in front and not at the rear.
+        const player = new Car(620, height / 2);
+        // A small field rather than a single target.
+        // Hustle should be able to overtake at least one rival, while Deep Focus
+        // remains the route to overtaking the whole field.
+        const competitors = [
+            new Car(380, height / 2 - 90),
+            new Car(500, height / 2 + 90),
+            new Car(560, height / 2 - 30),
+            new Car(700, height / 2 + 30),
+            new Car(840, height / 2 - 90),
+            new Car(980, height / 2 + 90)
+        ];
+
+        let cameraX = 0;
+        let time = 0;
+
+        const heartData = new Array(100).fill(0);
+        let heartTime = 0;
+
+        function updateAndDrawHeartbeat() {
+            heartCtx.clearRect(0, 0, heartCanvas.width, heartCanvas.height);
+            
+            let nextVal = 0;
+            heartTime += 0.1;
+
+            if (state.upgraded) {
+                // Perfect, fast, powerful sine wave
+                nextVal = Math.sin(heartTime * 2) * (heartCanvas.height * 0.3);
+            } else if (state.focus) {
+                // Slow, deep, rhythmic wave
+                nextVal = Math.sin(heartTime * 0.5) * (heartCanvas.height * 0.25);
+            } else if (state.hustle) {
+                // Erratic, jagged noise
+                nextVal = (Math.random() - 0.5) * (heartCanvas.height * 0.8);
+            } else {
+                // Idle small fluctuations
+                nextVal = (Math.random() - 0.5) * (heartCanvas.height * 0.1);
+            }
+
+            // Shift data and push new value
+            heartData.shift();
+            heartData.push(nextVal);
+
+            // Draw line
+            heartCtx.beginPath();
+            heartCtx.strokeStyle = 'white';
+            heartCtx.lineWidth = 2;
+            
+            const stepX = heartCanvas.width / (heartData.length - 1);
+            const midY = heartCanvas.height / 2;
+
+            for (let i = 0; i < heartData.length; i++) {
+                const x = i * stepX;
+                const y = midY + heartData[i];
+                if (i === 0) heartCtx.moveTo(x, y);
+                else heartCtx.lineTo(x, y);
+            }
+            heartCtx.stroke();
+        }
+
+        function updatePhysics() {
+            // Update Competitors (Constant grind)
+            // Rival cars are NEVER slowed by Focus.
+            // They keep their own normal speed and continue racing naturally.
+            competitors.forEach(c => {
+                c.x += c.speed;
+            });
+
+            if (state.upgraded) {
+                // Massive, effortless speed
+                player.speed = 12; 
+                player.x += player.speed;
+                statusMessage.innerText = "KNOWLEDGE INTEGRATED. MAXIMUM VELOCITY ACHIEVED.";
+                statusMessage.classList.add("text-white", "font-bold");
+                
+                // Check Win Condition (Passed all competitors)
+                let passedAll = true;
+                competitors.forEach(c => {
+                    if (player.x < c.x + 120) passedAll = false;
+                });
+
+                if (passedAll && !state.won) {
+                    state.won = true;
+
+                    // Let the #1 celebration play before showing the final
+                    // winning screen.
+                    setTimeout(() => {
+                        winOverlay.classList.remove('opacity-0', 'pointer-events-none');
+                    }, 2200);
+                }
+
+            } else {
+                // Holding a mode has a deliberately slow opening phase.
+                // This lets the field move past the player before acceleration
+                // creates the payoff.
+
+                if (state.focus) {
+                    state.focusTime += 1;
+                    state.focusBoostPulse += 0.20;
+
+                    // Very slow while the player is actively studying.
+                    player.speed = 0.45;
+                    player.x += player.speed;
+
+                    // Keep building knowledge while falling through the pack.
+                    state.progress = Math.min(100, state.progress + 0.35);
+
+                    statusMessage.innerText =
+                        "DEEP FOCUS... SLOWING DOWN AND BUILDING KNOWLEDGE";
+
+                    if (state.progress >= 100) {
+                        state.upgraded = true;
+                        btnFocus.classList.add('opacity-50', 'pointer-events-none');
+                        btnHustle.classList.add('opacity-50', 'pointer-events-none');
+                    }
+
+                } else if (state.hustle) {
+                    state.hustleTime += 1;
+
+                    // Opening phase: rivals are allowed to advance past you.
+                    // After ~1 second, hustle ramps up and becomes useful.
+                    const hustleRamp = Math.min(1, state.hustleTime / 90);
+                    const hustleSpeed = 3.8 + (3.8 * hustleRamp);
+
+                    // Hustle is a catch-up mechanic, not a passing mechanic.
+                    // Find the closest car ahead. We allow the player to close
+                    // the gap, but cap the player's position just behind it.
+                    // This prevents Space from carrying the player beyond the
+                    // field while still making the car visibly accelerate.
+                    const carsAhead = competitors
+                        .filter(c => c.x > player.x)
+                        .sort((a, b) => a.x - b.x);
+
+                    const nearestAhead = carsAhead[0];
+                    const safeGap = 78;
+
+                    if (nearestAhead) {
+                        const gap = nearestAhead.x - player.x;
+
+                        if (gap <= safeGap) {
+                            player.speed = Math.max(0.8, Math.min(hustleSpeed, gap - safeGap + 0.8));
+                        } else {
+                            player.speed = hustleSpeed;
+                        }
+
+                        player.x += player.speed;
+
+                        // Hard positional ceiling only at the very edge of the
+                        // rival. This is not a teleport; it simply prevents the
+                        // player from crossing through the rival.
+                        if (player.x > nearestAhead.x - safeGap) {
+                            player.x = nearestAhead.x - safeGap;
+                        }
+                    } else {
+                        // No car ahead: stay at normal hustle speed rather than
+                        // allowing the player to race beyond the field.
+                        player.speed = Math.min(hustleSpeed, 6.0);
+                        player.x += player.speed;
+                    }
+
+                    statusMessage.innerText =
+                        state.hustleTime < 60
+                        ? "HUSTLE: BUILDING MOMENTUM... CLOSING THE GAP"
+                        : "HUSTLE: HIGH EFFORT — CAUGHT THE NEXT CAR";
+
+                } else if (state.recoveryTime > 0) {
+                    // After releasing a mode, give the car a temporary speed
+                    // advantage. This makes the action feel like: slow first,
+                    // then accelerate out of it.
+                    state.recoveryTime--;
+
+                    player.speed = 7.2;
+                    player.x += player.speed;
+
+                    statusMessage.innerText =
+                        "RECOVERY ACCELERATION — NOW MOVING FASTER";
+
+                } else {
+                    player.speed = 3;
+                    player.x += player.speed;
+                    statusMessage.innerText = "COASTING... FALLING BEHIND";
+                }
+            }
+
+            // Trigger the #1 celebration when the player passes every rival.
+            const playerIsFirst = competitors.every(c => player.x >= c.x + 120);
+
+            if (playerIsFirst && !state.playerWasFirst) {
+                state.placeOnePulse = 0.01;
+                state.showFirstPlace = true;
+            }
+            state.playerWasFirst = playerIsFirst;
+
+            // Keep the #1 marker visible once earned. The reset handler below
+            // clears it for a new race.
+            if (state.showFirstPlace) {
+                state.placeOnePulse += 0.045;
+            }
+
+            // Update UI Bar
+            upgradeBar.style.width = `${state.progress}%`;
+            upgradeText.innerText = `${Math.floor(state.progress)}%`;
+
+            // Camera locks player at 20% of screen width
+            cameraX = player.x - (width * 0.25);
+        }
+
+        function drawScene() {
+            ctx.clearRect(0, 0, width, height);
+
+            // Draw Road Lines (Parallax/Scrolling effect)
+            ctx.beginPath();
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([40, 40]);
+            
+            // Calculate where dashes should start based on camera to create moving illusion
+            const dashOffset = -(cameraX % 80); 
+            
+            // Draw lane dividers
+            const lanes = [height/2 - 30, height/2 + 30];
+            lanes.forEach(y => {
+                ctx.moveTo(dashOffset, y);
+                ctx.lineTo(width, y);
+            });
+            ctx.stroke();
+            ctx.setLineDash([]); // reset
+
+            // Draw Entities
+            competitors.forEach(c => c.draw(cameraX));
+            player.draw(cameraX);
+
+            // Persistent #1 marker: once earned, it stays above the car
+            // and remains visible while the winning overlay is displayed.
+            if (state.showFirstPlace) {
+                const p = state.placeOnePulse;
+                const bounce = Math.sin(p * 1.4) * 4;
+                const scale = 1 + Math.sin(p * 1.1) * 0.06;
+
+                ctx.save();
+                ctx.translate(player.x - cameraX, player.y - 30 - bounce);
+                ctx.scale(scale, scale);
+                ctx.globalAlpha = 1;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.font = '900 30px Arial';
+                ctx.fillStyle = '#FFFFFF';
+                ctx.strokeStyle = '#000000';
+                ctx.lineWidth = 5;
+                ctx.strokeText('#1', 0, 0);
+                ctx.fillText('#1', 0, 0);
+                ctx.restore();
+            }
+
+            
+            // Speed indicator particles around player if upgraded
+            if (state.upgraded) {
+                ctx.fillStyle = 'white';
+                for(let i=0; i<3; i++) {
+                    const px = (player.x - cameraX) + (Math.random() * 80 - 20);
+                    const py = player.y + (Math.random() * 40 - 10);
+                    ctx.fillRect(px, py, 4, 1);
+                }
+            }
+        }
+
+        function gameLoop() {
+            updatePhysics();
+            drawScene();
+            updateAndDrawHeartbeat();
+            
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Start Loop
+        requestAnimationFrame(gameLoop);
+
+    </script>
+</body>
+</html>
