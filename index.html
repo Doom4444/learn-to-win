@@ -4,6 +4,29 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Deep Learning Racer</title>
+
+<script>
+(() => {
+    const svg = `
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <rect width="64" height="64" rx="14" fill="#111111"/>
+  <path d="M14 38 L18 29 C19 26 22 24 26 24 H39 C43 24 46 27 48 31 L51 38 H54 C56 38 57 40 57 42 V46 H51 C50 50 47 52 43 52 C39 52 36 50 35 46 H29 C28 50 25 52 21 52 C17 52 14 50 13 46 H8 V42 C8 40 10 38 14 38Z" fill="#ffffff"/>
+  <path d="M24 27 H38 C40 27 42 29 44 33 H20 C21 29 22 27 24 27Z" fill="#111111"/>
+  <circle cx="21" cy="45" r="5" fill="#111111"/>
+  <circle cx="43" cy="45" r="5" fill="#111111"/>
+  <circle cx="21" cy="45" r="2" fill="#ffffff"/>
+  <circle cx="43" cy="45" r="2" fill="#ffffff"/>
+  <path d="M30 25 H34 L36 38 H32Z" fill="#111111"/>
+</svg>`;
+
+    const favicon = document.createElement("link");
+    favicon.rel = "icon";
+    favicon.type = "image/svg+xml";
+    favicon.href = "data:image/svg+xml," + encodeURIComponent(svg);
+    document.head.appendChild(favicon);
+})();
+</script>
+
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body, html {
