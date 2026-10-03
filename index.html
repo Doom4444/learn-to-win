@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no">
     <title>Deep Learning Racer</title>
 
 <script>
@@ -37,7 +37,7 @@
             background-color: #000;
             color: #fff;
             overflow: hidden;
-            touch-action: none; /* Prevent scrolling on mobile */
+            touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; /* Game surface */
         }
         canvas {
             display: block;
@@ -52,6 +52,233 @@
             box-shadow: 0 0 15px 2px rgba(255, 255, 255, 0.8);
             transform: scale(0.98);
         }
+    
+        /* Mobile responsive layout */
+        html, body {
+            min-height: 100%;
+        }
+
+        #game-canvas {
+            position: fixed;
+            inset: 0;
+            display: block;
+            width: 100vw;
+            height: 100dvh;
+            z-index: 0;
+        }
+
+        #game-controls {
+            padding-left: max(10px, env(safe-area-inset-left));
+            padding-right: max(10px, env(safe-area-inset-right));
+            padding-bottom: max(10px, env(safe-area-inset-bottom));
+        }
+
+        @media (max-width: 640px) {
+            body, html {
+                width: 100%;
+                height: 100dvh;
+                min-height: 100dvh;
+                overflow: hidden;
+            }
+
+            #game-canvas {
+                height: 100dvh;
+            }
+
+            body > div:first-of-type {
+                padding: 8px 10px;
+            }
+
+            #status-message {
+                margin-top: 6px;
+                font-size: 9px;
+                line-height: 1.2;
+                height: auto;
+                max-width: 95vw;
+            }
+
+            /*
+             * Portrait thumb layout:
+             * HUSTLE | ENGINE STATE | FOCUS
+             * Keep the three controls on one row, just like landscape.
+             */
+            #game-controls {
+                display: grid;
+                grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr);
+                grid-template-rows: 58px;
+                align-items: stretch;
+                gap: 7px;
+                padding-top: 18px;
+                padding-left: max(8px, env(safe-area-inset-left));
+                padding-right: max(8px, env(safe-area-inset-right));
+                padding-bottom: max(8px, env(safe-area-inset-bottom));
+            }
+
+            #btn-hustle {
+                grid-column: 1;
+                grid-row: 1;
+            }
+
+            #heartbeat-panel {
+                grid-column: 2;
+                grid-row: 1;
+                order: initial;
+            }
+
+            #btn-focus {
+                grid-column: 3;
+                grid-row: 1;
+            }
+
+            #btn-hustle,
+            #btn-focus {
+                width: 100%;
+                min-width: 0;
+                min-height: 58px;
+                height: 58px;
+                padding: 6px 4px;
+                border-width: 2px;
+                touch-action: none;
+            }
+
+            #btn-hustle span:first-child,
+            #btn-focus span:first-child {
+                font-size: 15px;
+                line-height: 1;
+            }
+
+            #btn-hustle span:last-child,
+            #btn-focus span:last-child {
+                font-size: 9px;
+                margin-top: 4px;
+            }
+
+            #heartbeat-panel {
+                width: 100%;
+                max-width: none;
+                height: 58px;
+                min-height: 58px;
+                overflow: hidden;
+            }
+
+            #heartbeat-panel canvas {
+                width: 100%;
+                height: 100%;
+            }
+
+            #win-overlay {
+                padding: 20px;
+                padding-top: max(20px, env(safe-area-inset-top));
+                padding-bottom: max(20px, env(safe-area-inset-bottom));
+                text-align: center;
+            }
+
+            #win-overlay h1 {
+                font-size: clamp(2rem, 11vw, 3.5rem);
+            }
+
+            #win-overlay p {
+                font-size: clamp(0.9rem, 4vw, 1.25rem);
+            }
+        }
+
+        @media (max-width: 380px) {
+            #btn-hustle,
+            #btn-focus {
+                min-height: 52px;
+                height: 52px;
+            }
+
+            #btn-hustle span:first-child,
+            #btn-focus span:first-child {
+                font-size: 13px;
+            }
+
+            #heartbeat-panel {
+                height: 36px;
+                min-height: 36px;
+            }
+        }
+
+/* Extra compact landscape mode: preserve more vertical race area. */
+@media (orientation: landscape) and (max-height: 360px) and (max-width: 900px) {
+            #game-controls {
+                gap: 5px;
+                padding-top: 6px;
+            }
+
+            #btn-hustle,
+            #btn-focus {
+                height: 42px;
+                min-height: 42px;
+            }
+
+            #btn-hustle span:first-child,
+            #btn-focus span:first-child {
+                font-size: 11px;
+            }
+
+            #btn-hustle span:last-child,
+            #btn-focus span:last-child {
+                display: none;
+            }
+
+            #heartbeat-panel {
+                height: 26px;
+                min-height: 26px;
+            }
+        }
+
+            #btn-hustle,
+            #btn-focus {
+                flex: 1;
+                min-height: 52px;
+                height: 52px;
+                max-width: 180px;
+            }
+
+            #heartbeat-panel {
+                flex: 1;
+                height: 52px;
+                min-height: 52px;
+                max-width: 240px;
+                order: initial;
+            }
+
+            #status-message {
+                display: none;
+            }
+        }
+
+            @media (orientation: landscape) and (max-width: 900px) {
+            #game-controls {
+                display: flex;
+                flex-direction: row;
+                gap: 8px;
+                padding-top: 8px;
+            }
+
+            #btn-hustle,
+            #btn-focus {
+                flex: 1;
+                min-height: 52px;
+                height: 52px;
+                max-width: 180px;
+            }
+
+            #heartbeat-panel {
+                flex: 1;
+                height: 52px;
+                min-height: 52px;
+                max-width: 240px;
+                order: initial;
+            }
+
+            #status-message {
+                display: none;
+            }
+        }
+
     </style>
 </head>
 <body class="font-tech flex flex-col h-screen w-screen selection:bg-white selection:text-black">
@@ -83,7 +310,7 @@
     <canvas id="game-canvas" class="flex-grow z-0"></canvas>
 
     <!-- Bottom UI: Controls and Heartbeat -->
-    <div class="absolute bottom-0 left-0 w-full p-4 pb-8 z-10 flex flex-col md:flex-row items-center justify-center gap-4 md:gap-8 bg-gradient-to-t from-black via-black/80 to-transparent">
+    <div id="game-controls" class="absolute bottom-0 left-0 w-full p-4 pb-8 z-10 flex flex-col md:flex-row items-center justify-center gap-4 md:gap-8 bg-gradient-to-t from-black via-black/80 to-transparent">
         
         <!-- Hustle Button -->
         <button id="btn-hustle" class="btn-glow flex-1 md:flex-none border-2 border-white px-4 md:px-8 py-5 min-h-[76px] touch-manipulation flex flex-col items-center justify-center transition-colors hover:bg-white/10 active:bg-white active:text-black w-full md:w-48">
@@ -92,7 +319,7 @@
         </button>
 
         <!-- Heartbeat Monitor -->
-        <div class="flex-1 w-full max-w-md h-20 border border-white/30 bg-black/50 relative overflow-hidden flex flex-col">
+        <div id="heartbeat-panel" class="flex-1 w-full max-w-md h-20 border border-white/30 bg-black/50 relative overflow-hidden flex flex-col">
             <span class="absolute top-1 left-2 text-[10px] text-white/50 tracking-wider z-10">MENTAL STATE</span>
             <canvas id="heartbeat-canvas" class="w-full h-full"></canvas>
         </div>
@@ -121,17 +348,26 @@
         // Sizing
         let width, height;
         function resize() {
-            width = window.innerWidth;
-            height = window.innerHeight;
+            const viewport = window.visualViewport;
+
+            // visualViewport is more accurate on mobile when browser chrome
+            // expands/collapses.
+            width = Math.max(1, Math.round(viewport?.width || window.innerWidth));
+            height = Math.max(1, Math.round(viewport?.height || window.innerHeight));
+
             canvas.width = width;
             canvas.height = height;
-            
-            // Heartbeat canvas internal res
+            canvas.style.width = '100vw';
+            canvas.style.height = '100dvh';
+
             const heartRect = heartCanvas.parentElement.getBoundingClientRect();
-            heartCanvas.width = heartRect.width;
-            heartCanvas.height = heartRect.height;
+            heartCanvas.width = Math.max(1, Math.round(heartRect.width));
+            heartCanvas.height = Math.max(1, Math.round(heartRect.height));
         }
-        window.addEventListener('resize', resize);
+
+        window.addEventListener('resize', resize, { passive: true });
+        window.visualViewport?.addEventListener('resize', resize, { passive: true });
+        window.addEventListener('orientationchange', () => setTimeout(resize, 100), { passive: true });
         resize();
 
         // State
@@ -564,6 +800,16 @@
 
         function drawScene() {
             ctx.clearRect(0, 0, width, height);
+            // Landscape phones have a short viewport. Shift the rendered
+            // scene upward so the cars remain visible. This is visual only;
+            // car physics and world coordinates are unchanged.
+            const isMobileLandscape = width > height && width <= 900;
+            const landscapeSceneOffset = isMobileLandscape
+                ? -Math.min(82, Math.max(32, (width / height) * 20))
+                : 0;
+            ctx.save();
+            ctx.translate(0, landscapeSceneOffset);
+
 
             // Draw Road Lines (Parallax/Scrolling effect)
             ctx.beginPath();
@@ -619,7 +865,9 @@
                     ctx.fillRect(px, py, 4, 1);
                 }
             }
-        }
+        
+            ctx.restore();
+}
 
         function gameLoop() {
             updatePhysics();
